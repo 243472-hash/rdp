@@ -13,12 +13,21 @@ jobs:
         shell: pwsh
         run: |
           Write-Host "=== Downloading PsExec (for SYSTEM privileges) ==="
-          Invoke-WebRequest -Uri https://download.sysinternals.com/files/PSTools.zip -OutFile PSTools.zip
-          Expand-Archive PSTools.zip -DestinationPath .
-          $psexec = (Resolve-Path .\PSTools\PsExec.exe).Path
+          $zipPath = "$env:TEMP\PSTools.zip"
+          $extractPath = "$env:TEMP\PSTools"
+          Invoke-WebRequest -Uri https://download.sysinternals.com/files/PSTools.zip -OutFile $zipPath
+          Expand-Archive -Path $zipPath -DestinationPath $extractPath -Force
+
+          # Find PsExec.exe no matter where it extracted
+          $psexec = Get-ChildItem -Path $extractPath -Recurse -Filter PsExec.exe | Select-Object -First 1
+          if (-not $psexec) {
+            Write-Error "❌ PsExec.exe not found after extraction"
+            exit 1
+          }
+          Write-Host "✅ Found PsExec at: $($psexec.FullName)"
 
           Write-Host "=== Enabling Remote Desktop and Firewall Rules ==="
-          & $psexec -s powershell -Command "
+          & $psexec.FullName -s powershell -Command "
             Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name 'fDenyTSConnections' -Value 0 -Force;
             Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name 'UserAuthentication' -Value 0 -Force;
             Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name 'SecurityLayer' -Value 0 -Force;
